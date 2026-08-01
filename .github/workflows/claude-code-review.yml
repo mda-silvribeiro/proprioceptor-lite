@@ -1,0 +1,100 @@
+# Automated first-pass PR review by Claude, keyed to this repo's invariants.
+#
+# This runs on every non-draft, non-Dependabot pull request and posts a single
+# sticky review comment. It is a first pass, not a merge gate: it has no write
+# access to code and cannot approve or block. The deterministic gates in ci.yml
+# (typecheck, unit, web) remain the authority on mergeability. Dependabot PRs are
+# excluded here and handled by dependabot-auto-merge.yml.
+name: claude-code-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Read the code, write PR conversation only. No `contents: write`: this job
+# reviews, it does not commit.
+permissions:
+  contents: read
+  pull-requests: write
+  # id-token is required for Anthropic workload-identity federation; harmless
+  # when a plain API key is used instead.
+  id-token: write
+
+concurrency:
+  # One in-flight review per PR; a new push supersedes the previous run.
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Fork PRs get no repo secrets, so ANTHROPIC_API_KEY would be empty and the
+    # step would post a red check; skip them cleanly. `pull_request` (not
+    # `pull_request_target`) is the security-correct trigger, so the fix is to
+    # skip forks, not to widen the trigger. Dependabot PRs are handled by
+    # dependabot-auto-merge.yml, and drafts are not reviewed until ready.
+    if: >-
+      ${{ github.event.pull_request.draft == false &&
+          github.actor != 'dependabot[bot]' &&
+          github.event.pull_request.head.repo.fork == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Job-level env may read secrets; the review step gates on it so a repo (or
+    # fork) without the key produces a green, no-op run instead of a red check.
+    env:
+      HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - name: Check out the PR head
+        if: env.HAS_ANTHROPIC_KEY == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          # Do not leave the Actions token persisted in .git/config; the review
+          # job has no reason to reuse it for further git operations.
+          persist-credentials: false
+
+      - name: Review with Claude
+        if: env.HAS_ANTHROPIC_KEY == 'true'
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          use_sticky_comment: true
+          # Pin the model explicitly for reproducible reviews; override per fork
+          # if a different tier is preferred (see docs/GITHUB_SETUP.md).
+          claude_args: "--model claude-sonnet-5"
+          prompt: |
+            Perform a focused engineering review of this pull request's diff. The
+            repository is a Cloudflare Worker plus two Durable Objects that buffer
+            phone motion frames and serve them over MCP; `docs/CONTRACTS.md` is the
+            authoritative specification for every wire format, endpoint, limit, and
+            MCP surface, and `CLAUDE.md` states the non-negotiable invariants. Read
+            both before reviewing. Restrict comments to defects and material risks
+            grounded in a specific line of the diff — do not restate the diff or
+            raise stylistic preferences.
+
+            Evaluate the diff against these invariants, in priority order:
+
+            1. Contracts-first. Any change to a wire shape, endpoint, rate limit,
+               body/frame cap, ring capacity, TTL, activity constant, or MCP
+               tool/field MUST be matched by a change to `docs/CONTRACTS.md` in the
+               same PR. A behavioural change with no corresponding contract change
+               is a finding. Verify the numbers in code equal the numbers in the
+               doc — re-read the doc, do not assume prior values.
+            2. NaN-fail-closed. Every numeric validation must apply a finite check
+               before, or fused with, the range check. Flag any bare
+               `x < lo || x > hi`, which admits `NaN` as in-range.
+            3. Null over guesswork. Missing or stale data must surface as `null`,
+               never a fabricated zero, last-known value, or interpolated guess.
+               Scrutinise `orientation`, `cadenceSpm`, `freshSeconds`, and heading.
+            4. Capability-URL security model. Token comparisons stay constant-time;
+               unknown-token and expired-session responses stay byte-identical
+               (`404 {"error":"unknown session"}`); rate limits and the 32 KiB /
+               25-frame ingest caps stay enforced before expensive parsing; no
+               frame value is ever logged; the CSP gains no external origin.
+            5. Zero runtime dependencies. Nothing may be added to `dependencies` in
+               package.json; only `devDependencies` may grow.
+            6. Test coverage. Any auth-adjacent, validation, or classifier change
+               must arrive with a test that would fail without the change.
+
+            Group findings by severity (blocker / should-fix / nit). If the diff is
+            clean against all six, say so explicitly and concisely. Cite
+            `file:line` for every finding.

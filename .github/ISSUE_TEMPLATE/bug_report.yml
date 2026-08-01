@@ -1,0 +1,40 @@
+name: Bug report
+description: Something behaves differently from docs/CONTRACTS.md or the docs.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every instance is self-hosted, so please describe the behaviour of the
+        code, not of a hosted service. Never paste a session token or a
+        capability URL — they are the only credential a session has.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, and what docs/CONTRACTS.md led you to expect.
+      placeholder: "Expected … per CONTRACTS.md §…, but observed …"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. Include the tool call or request path (without the token).
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser/OS for the page; MCP client for tool calls; Node version for tests.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Test output, a JSON response (redacted), or a stack trace. No tokens.
+      render: shell
+    validations:
+      required: false

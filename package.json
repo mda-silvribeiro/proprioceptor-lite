@@ -1,0 +1,22 @@
+{
+  "name": "proprioceptor-lite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Give Claude a sense of your motion — from your phone's browser. No app, no account, no location, nothing stored.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:web": "playwright test",
+    "check": "npm run typecheck && npm run test",
+    "dev": "npx wrangler@4 dev",
+    "deploy": "npx wrangler@4 deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "@playwright/test": "^1.54.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,62 @@
+# Interactive Claude: responds when a collaborator writes @claude in an issue,
+# a PR, or a review/issue comment. Distinct from claude-code-review.yml, which
+# runs unprompted on every PR; this one is on-demand and may implement changes
+# on a branch when explicitly asked.
+name: claude
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+# Coarse pre-filter so the job is not scheduled for every comment in the repo;
+# the action applies the authoritative trigger-phrase check once it runs.
+jobs:
+  respond:
+    if: >-
+      ${{ github.actor != 'claude[bot]' && (
+          (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+          (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+          (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+      ) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Write scopes so Claude can push a branch and open/adjust a PR when a human
+    # explicitly asks it to implement something; it still cannot merge.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    concurrency:
+      group: claude-interactive-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: false
+    # Skip cleanly (green, no-op) when the API key is not configured, so a clone
+    # without the secret does not fail on every @claude mention.
+    env:
+      HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - name: Check out the repository
+        if: env.HAS_ANTHROPIC_KEY == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Claude
+        if: env.HAS_ANTHROPIC_KEY == 'true'
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # `--append-system-prompt` injects the repository's hard invariants into
+          # every interactive run so on-demand edits obey the same rules CI does:
+          # the contract stays the source of truth, gates stay NaN-fail-closed and
+          # null-honest, and no runtime dependency is ever introduced.
+          claude_args: >-
+            --model claude-sonnet-5
+            --append-system-prompt
+            "docs/CONTRACTS.md is the source of truth for every wire format, limit, and MCP surface; any change to one requires the matching change to that file in the same commit. Numeric validation is NaN-fail-closed (finite check before range check). Missing data is null, never a fabricated value. The Worker carries zero runtime npm dependencies; only devDependencies may change. Preserve the constant-time token comparison and the uniform 404 for unknown-vs-expired sessions. Run npm run typecheck and npm run test before proposing a change is complete."

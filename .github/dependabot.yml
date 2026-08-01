@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # One PR per weekly refresh instead of one per action SHA bump. Keeps the
+    # SHA-pinned workflows current with a single review + a single CI run.
+    groups:
+      github-actions:
+        patterns:
+          - "*"

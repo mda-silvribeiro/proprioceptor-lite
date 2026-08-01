@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a change. Note that several directions are explicit non-goals.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, check the **Non-goals** in docs/DESIGN.md and CONTRACTS.md.
+        Precise location, accounts, persistence beyond the ring, free-text fields,
+        WebSockets, and runtime npm dependencies are deliberately out of scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that the current surface does not support?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What would change, and in which layer (core, worker/DO, web, docs)?
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariant impact
+      description: Does it touch a contract, a numeric gate, null-honesty, or the dependency rule? How is each kept?
+    validations:
+      required: false

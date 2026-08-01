@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only by default; each job re-declares exactly what it needs.
+permissions:
+  contents: read
+
+# Supersede an in-flight run when a newer commit lands on the same ref. Keyed on
+# ref, not run-id, so pushes to main never cancel each other mid-merge.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # Third-party actions are pinned to a full commit SHA (Dependabot keeps the
+      # trailing version comment current); a moved tag cannot repoint them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      # --ignore-scripts: dependency lifecycle scripts never run on the runner.
+      # This project has zero runtime deps and its dev tooling (tsc, vitest)
+      # resolves platform binaries via optionalDependencies, so nothing needs a
+      # postinstall here.
+      - run: npm ci --ignore-scripts
+      # Enforce the headline invariant mechanically, not just in prose: the
+      # deployed Worker carries zero runtime dependencies. A PR that adds one
+      # fails here, at the gate.
+      - name: Assert zero runtime dependencies
+        run: >-
+          node -e "const d=Object.keys(require('./package.json').dependencies||{});
+          if(d.length){console.error('runtime dependencies are forbidden by CLAUDE.md:',d);process.exit(1)}
+          else console.log('ok: zero runtime dependencies')"
+      - run: npm run typecheck
+      - run: npm run test
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # Browser provisioning is an explicit CLI step, not a package postinstall,
+      # so --ignore-scripts above does not affect it.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:web

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mda-silvribeiro/proprioceptor-lite/security/advisories/new
+    about: Do not open a public issue for a vulnerability. Use private vulnerability reporting (see SECURITY.md).
+  - name: Privacy / data-protection question
+    url: https://github.com/mda-silvribeiro/proprioceptor-lite/blob/main/PRIVACY.md
+    about: Retention, and controller questions are answered in PRIVACY.md, and docs/DATA_PROTECTION.md.

@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover so env(safe-area-inset-*) has something to report on
+         notched phones; the stylesheet pads back in. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>proprioceptor·lite — give Claude a sense of your motion</title>
+    <meta
+      name="description"
+      content="Stream your phone's heading and tilt to your own Cloudflare Worker so Claude can read your motion over MCP. No app, no account, no location; motion is buffered briefly, then erased."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fbfbfc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)" />
+    <!-- Inline SVG favicon as a data: URI — allowed by `img-src 'self' data:`,
+         and it keeps the page at zero external requests. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Ccircle%20cx='16'%20cy='16'%20r='15'%20fill='%230a6ebd'/%3E%3Cpath%20d='M16%204.5%2021%2023%2016%2019.4%2011%2023Z'%20fill='%23fff'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/style.css" />
+    <!-- Modules are deferred by default; CSP forbids inline script, so every line
+         of JS is a file. -->
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <h1 class="wordmark">
+        proprioceptor<span class="wordmark-dot" aria-hidden="true">·</span
+        ><span class="wordmark-lite">lite</span>
+      </h1>
+      <p class="tagline">
+        Give Claude a sense of your motion — from your phone's browser. No app, no account, no
+        location; the buffer is short-lived and erases itself.
+      </p>
+    </header>
+
+    <noscript>
+      <div class="noscript">
+        <h2>JavaScript is required</h2>
+        <p>
+          This page reads your phone's motion sensors and talks to your own Worker, both of which
+          need JavaScript. There is no server-rendered fallback, because there is no server-side
+          session to render.
+        </p>
+      </div>
+    </noscript>
+
+    <main id="main" tabindex="-1">
+      <!-- role=alert: session-fatal news (expired, erased, gone) is announced at
+           once, and always alongside a next action. -->
+      <div class="banner" id="banner" role="alert" hidden>
+        <p class="banner-text" id="banner-text"></p>
+        <button class="btn btn-quiet" id="banner-dismiss" type="button">Dismiss</button>
+      </div>
+
+      <!-- landing (both devices) -->
+      <section class="view" id="view-landing" aria-labelledby="landing-h" hidden>
+        <h2 class="view-h" id="landing-h" tabindex="-1">Two devices, one session</h2>
+        <p class="lede">
+          Start a session on a computer, then pair the phone that will do the sensing. The phone
+          streams; the computer holds the connector URL you paste into claude.ai.
+        </p>
+
+        <div class="cards">
+          <section class="card" aria-labelledby="start-h">
+            <h3 class="card-h" id="start-h">On this computer</h3>
+            <p class="card-p">
+              Creates a fresh session and shows a connector URL plus a 6-digit pairing code.
+            </p>
+            <button class="btn btn-primary" id="btn-start" type="button">Start a session</button>
+            <p class="msg" id="start-msg" role="status" aria-live="polite"></p>
+          </section>
+
+          <section class="card" aria-labelledby="claim-h">
+            <h3 class="card-h" id="claim-h">On your phone</h3>
+            <p class="card-p">Already have a code from the other device? Enter it here.</p>
+            <form class="claim-form" id="form-claim" novalidate>
+              <label class="label" for="code">6-digit pairing code</label>
+              <input
+                class="code-input"
+                id="code"
+                name="code"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                minlength="6"
+                spellcheck="false"
+                autocapitalize="off"
+                enterkeyhint="go"
+                aria-describedby="claim-hint claim-msg"
+              />
+              <p class="hint" id="claim-hint">Submits itself as soon as six digits are in.</p>
+              <button class="btn btn-primary" id="btn-claim" type="submit">
+                Connect this phone
+              </button>
+            </form>
+            <p class="msg" id="claim-msg" role="status" aria-live="polite"></p>
+          </section>
+        </div>
+      </section>
+
+      <!--  desktop: session created  -->
+      <section class="view" id="view-desktop" aria-labelledby="desktop-h" hidden>
+        <h2 class="view-h" id="desktop-h" tabindex="-1">Session live — now pair your phone</h2>
+
+        <ol class="steps">
+          <li class="step">
+            <h3 class="step-h">Open this page on your phone</h3>
+            <p class="step-p">
+              Same address as this tab: <code class="inline-code" id="site-host">—</code>
+            </p>
+          </li>
+          <li class="step">
+            <h3 class="step-h">Enter this pairing code</h3>
+            <p class="code-display" aria-describedby="code-expiry">
+              <!-- <output> carries an implicit live region, so the code is spoken
+                   once when it appears; aria-label spells the digits out. -->
+              <output class="code-digits" id="code-digits">——————</output>
+            </p>
+            <p class="step-p" id="code-expiry">
+              Expires in <span class="mono" id="code-countdown">—:——</span>. One use only.
+            </p>
+          </li>
+          <li class="step">
+            <h3 class="step-h">Add the connector in claude.ai</h3>
+            <p class="step-p">
+              Settings → Connectors → <strong>Add custom connector</strong> → paste this URL:
+            </p>
+            <div class="copy-row">
+              <code class="inline-code url-code" id="connector-url">—</code>
+              <button class="btn btn-secondary" id="btn-copy" type="button">
+                <span id="btn-copy-label">Copy URL</span>
+              </button>
+            </div>
+            <p class="msg" id="copy-msg" role="status" aria-live="polite"></p>
+          </li>
+        </ol>
+
+        <section class="panel" aria-labelledby="dstatus-h">
+          <h3 class="panel-h" id="dstatus-h">
+            <span class="chip" id="d-chip">waiting</span>
+            <span class="live-h-text">Live status</span>
+          </h3>
+          <!-- No aria-live on the table: it changes every second and would make a
+               screen reader unusable. Transitions are announced below it. -->
+          <dl class="readouts" id="desktop-status">
+            <div class="readout">
+              <dt class="readout-k">Phone</dt>
+              <dd class="readout-v" id="d-phone">waiting to pair</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Frame rate</dt>
+              <dd class="readout-v mono" id="d-rate">—</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Newest frame</dt>
+              <dd class="readout-v mono" id="d-fresh">—</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Claude tool calls</dt>
+              <dd class="readout-v" id="d-mcp">none yet</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Session age</dt>
+              <dd class="readout-v mono" id="d-age">—</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Erases itself in</dt>
+              <dd class="readout-v mono" id="d-ttl">—</dd>
+            </div>
+          </dl>
+          <p class="msg" id="d-announce" role="status" aria-live="polite"></p>
+          <p class="hint">
+            Keep this tab open — the session token lives only in this page's memory, so a reload
+            starts over. Polled once a second.
+          </p>
+        </section>
+
+        <div class="end-block" id="end-desktop"></div>
+      </section>
+
+      <!--  phone: claimed session -->
+      <section class="view" id="view-phone" aria-labelledby="phone-h" hidden>
+        <h2 class="view-h" id="phone-h" tabindex="-1">This phone is the sensor</h2>
+
+        <section class="panel gate" id="gate" aria-labelledby="gate-h">
+          <h3 class="panel-h" id="gate-h">Ready when you are</h3>
+          <p class="card-p">
+            Motion access is granted per page and only from a tap — iOS will not hand over the
+            sensors any other way. Nothing is read before you tap.
+          </p>
+          <button class="btn btn-primary btn-big" id="btn-sensors" type="button">
+            Start streaming
+          </button>
+          <p class="hint" id="gate-privacy">
+            While streaming, this phone sends heading, tilt and acceleration magnitude — never your
+            location — to the Worker you paired with. Readings sit in a buffer of at most 30 minutes
+            that erases itself; they are processed only on the basis of your consent. Tapping Start
+            is that consent, and “End &amp; erase” withdraws it.
+          </p>
+          <p class="msg" id="gate-msg" role="status" aria-live="polite"></p>
+          <p class="msg msg-error" id="gate-error" role="alert" hidden></p>
+          <button class="btn btn-quiet" id="btn-gate-home" type="button" hidden>
+            Back to the start page
+          </button>
+        </section>
+
+        <section class="panel live" id="live" aria-labelledby="live-h" hidden>
+          <h3 class="panel-h" id="live-h" tabindex="-1">
+            <span class="chip" id="stream-chip">idle</span>
+            <span class="live-h-text">Streaming to your Worker</span>
+          </h3>
+
+          <div class="dials">
+            <figure class="dial">
+              <!-- aria-label is rewritten with the current value, so the dial is
+                   readable without sight; it is not a live region, so it is read
+                   on demand rather than shouted five times a second. -->
+              <svg
+                class="dial-svg"
+                id="compass"
+                viewBox="0 0 120 120"
+                role="img"
+                aria-label="Compass: no heading yet"
+              >
+                <circle class="dial-face" cx="60" cy="60" r="53" />
+                <g class="dial-ticks" aria-hidden="true">
+                  <line x1="60" y1="9" x2="60" y2="19" />
+                  <line x1="111" y1="60" x2="101" y2="60" />
+                  <line x1="60" y1="111" x2="60" y2="101" />
+                  <line x1="9" y1="60" x2="19" y2="60" />
+                  <line x1="96" y1="24" x2="90" y2="30" />
+                  <line x1="96" y1="96" x2="90" y2="90" />
+                  <line x1="24" y1="96" x2="30" y2="90" />
+                  <line x1="24" y1="24" x2="30" y2="30" />
+                </g>
+                <g aria-hidden="true">
+                  <text x="60" y="33" class="dial-card-n">N</text>
+                  <text x="87" y="64" class="dial-card">E</text>
+                  <text x="60" y="94" class="dial-card">S</text>
+                  <text x="33" y="64" class="dial-card">W</text>
+                </g>
+                <g class="dial-needle" id="needle" transform="rotate(0 60 60)">
+                  <path class="needle-n" d="M60 20 66 60 60 55 54 60Z" />
+                  <path class="needle-s" d="M60 100 54 60 60 65 66 60Z" />
+                </g>
+                <circle class="dial-hub" cx="60" cy="60" r="3.5" />
+              </svg>
+              <figcaption class="dial-cap">
+                <span class="dial-value mono" id="v-heading">—</span>
+                <span class="dial-label" id="l-heading">heading</span>
+              </figcaption>
+            </figure>
+
+            <figure class="dial">
+              <svg
+                class="dial-svg"
+                id="level"
+                viewBox="0 0 120 120"
+                role="img"
+                aria-label="Bubble level: no tilt reading yet"
+              >
+                <circle class="dial-face" cx="60" cy="60" r="53" />
+                <circle class="level-target" cx="60" cy="60" r="17" />
+                <g class="dial-ticks" aria-hidden="true">
+                  <line x1="60" y1="14" x2="60" y2="24" />
+                  <line x1="106" y1="60" x2="96" y2="60" />
+                  <line x1="60" y1="106" x2="60" y2="96" />
+                  <line x1="14" y1="60" x2="24" y2="60" />
+                </g>
+                <!-- Moved with `transform`, never cx/cy: geometry attributes would
+                     invalidate layout on every frame. -->
+                <circle
+                  class="level-bubble"
+                  id="bubble"
+                  cx="60"
+                  cy="60"
+                  r="12"
+                  transform="translate(0 0)"
+                />
+              </svg>
+              <figcaption class="dial-cap">
+                <span class="dial-value mono" id="v-tilt">—</span>
+                <span class="dial-label">pitch / roll</span>
+              </figcaption>
+            </figure>
+          </div>
+
+          <dl class="readouts" id="phone-readouts">
+            <div class="readout">
+              <dt class="readout-k">Motion</dt>
+              <dd class="readout-v"><span class="chip" id="motion-chip">unknown</span></dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Accel magnitude</dt>
+              <dd class="readout-v mono" id="v-amag">—</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Sample rate</dt>
+              <dd class="readout-v mono" id="v-rate">—</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Frames sent</dt>
+              <dd class="readout-v mono" id="v-sent">0</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Dropped (backpressure)</dt>
+              <dd class="readout-v mono" id="v-dropped">0</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Last upload</dt>
+              <dd class="readout-v mono" id="v-lastpost">—</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Heading reference</dt>
+              <dd class="readout-v" id="v-absolute">—</dd>
+            </div>
+            <div class="readout">
+              <dt class="readout-k">Claude tool calls</dt>
+              <dd class="readout-v" id="v-mcp">none yet</dd>
+            </div>
+          </dl>
+
+          <p class="msg" id="stream-msg" role="status" aria-live="polite"></p>
+          <p class="hint" id="wake-hint">Checking whether this browser can hold the screen awake…</p>
+        </section>
+
+        <div class="end-block end-block-sticky" id="end-phone"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Frames carry heading, tilt and acceleration magnitude — never coordinates. A missing reading
+        travels as <code class="inline-code">null</code>, never as a fabricated zero.
+      </p>
+    </footer>
+  </body>
+</html>

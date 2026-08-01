@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run typecheck)",
+      "Bash(npm run test)",
+      "Bash(npm run test:web)",
+      "Bash(npm run check)",
+      "Bash(npx playwright test*)",
+      "Bash(npx tsc*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "payload=\"$(cat)\"; if command -v jq >/dev/null 2>&1; then file=$(printf '%s' \"$payload\" | jq -r '.tool_input.file_path // empty'); else file=$(printf '%s' \"$payload\" | grep -o '\"file_path\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' | head -1 | sed -E 's/.*\"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\"/\\1/'); fi; case \"$file\" in *.ts|*.js) npm run -s typecheck || true ;; esac; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

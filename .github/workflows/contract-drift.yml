@@ -1,0 +1,71 @@
+# Scheduled contract-drift audit. docs/CONTRACTS.md is the source of truth for
+# every wire limit, rate limit, TTL, ring size, classifier constant, token/code
+# length, and MCP protocol version. This job has Claude re-derive those numbers
+# from the code weekly and open an issue only on a concrete, cited mismatch
+# turning the repo's contracts-first rule into an autonomous check rather than a
+# convention that erodes over time.
+name: contract-drift
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-drift
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: ${{ github.event.repository.private == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    # No key configured → green no-op rather than a failed scheduled run.
+    env:
+      HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - if: env.HAS_ANTHROPIC_KEY == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.HAS_ANTHROPIC_KEY == 'true'
+        uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model claude-sonnet-5"
+          prompt: |
+            Audit this repository for drift between the numeric contract stated in
+            docs/CONTRACTS.md and the constants actually defined in the code.
+
+            Scope the comparison to values that are load-bearing on the wire or in
+            the security/ephemerality model:
+              - Rate limits and windows: LOBBY_MINT_LIMIT/WINDOW, INGEST_LIMIT/WINDOW,
+                MCP_LIMIT/WINDOW, CODE_MAX_ATTEMPTS (src/do.ts).
+              - TTLs and buffer bounds: SESSION_TTL_MS, CODE_TTL_MS, RING_CAP,
+                RING_WINDOW_MS (src/do.ts, src/core/ring.ts).
+              - Ingest caps: MAX_BODY_BYTES (src/worker.ts), MAX_FRAMES_PER_BATCH and
+                the field ranges in src/core/validate.ts.
+              - Classifier constants: ACTIVITY_WINDOW_S, MIN_SAMPLES, MAX_STALENESS_S,
+                PEAK_PROMINENCE, MIN_PEAK_SPACING_S, SD_STATIONARY, SD_RUNNING,
+                CADENCE_WALK_MIN, CADENCE_RUN_MIN (src/core/activity.ts).
+              - Identity: TOKEN_LENGTH, CODE_LENGTH (src/core/tokens.ts) and the MCP
+                SUPPORTED_PROTOCOL_VERSIONS and tool names (src/core/mcp.ts).
+
+            For each, read the exact constant from the code and the exact figure in
+            docs/CONTRACTS.md and confirm they are equal. A NaN-fail-closed gate that
+            no longer applies a finite check before a range check, or a null that has
+            become a fabricated value, also counts as drift.
+
+            Report only concrete, reproduced mismatches — never speculation. If you
+            find one or more, first list open issues to avoid duplicates, then open a
+            single GitHub issue titled "Contract drift detected" labelled
+            `contract-drift`, with one row per mismatch giving the constant, its code
+            value at file:line, and the contradicting docs/CONTRACTS.md value and line.
+            If every value matches, take no action and open no issue.

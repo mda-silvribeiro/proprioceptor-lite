@@ -1,0 +1,10 @@
+# Default owner for everything in the repo.
+* @mda-silvribeiro
+
+# Contract, security, and privacy surfaces warrant an explicit owner even though
+# it is the same person today, it documents intent and survives adding
+# collaborators.
+/docs/CONTRACTS.md   @mda-silvribeiro
+/SECURITY.md         @mda-silvribeiro
+/PRIVACY.md          @mda-silvribeiro
+/.github/            @mda-silvribeiro

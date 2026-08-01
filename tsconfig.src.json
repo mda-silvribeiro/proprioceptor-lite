@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "types": ["@cloudflare/workers-types"],
+    "lib": ["ES2023"]
+  },
+  "include": ["src/**/*.ts", "test/core/**/*.ts", "test/server/**/*.ts"]
+}

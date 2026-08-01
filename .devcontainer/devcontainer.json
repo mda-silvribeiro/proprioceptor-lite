@@ -1,0 +1,16 @@
+{
+  "name": "proprioceptor-lite",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "postCreateCommand": "npm install && npx playwright install --with-deps chromium",
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": {
+      "label": "wrangler dev"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-playwright.playwright", "github.vscode-github-actions"]
+    }
+  }
+}
