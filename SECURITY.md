@@ -9,10 +9,13 @@ maintained release branches or a hosted service with a patch schedule.
 
 ## Reporting a vulnerability
 
-Please use GitHub's private vulnerability reporting for this repository
-(Security tab → "Report a vulnerability"). Do not open a public issue for a
-security problem. There is no email address for reports, the GitHub form
-is the only channel.
+Please use GitHub's private vulnerability reporting for this repository:
+open [Report a vulnerability](https://github.com/mda-silvribeiro/proprioceptor-lite/security/advisories/new)
+(the same form lives under the Security tab). How the process works on
+GitHub's side is described in
+[their private-reporting documentation](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability).
+Do not open a public issue for a security problem. There is no email
+address for reports, the GitHub form is the only channel.
 
 ## The security model
 
