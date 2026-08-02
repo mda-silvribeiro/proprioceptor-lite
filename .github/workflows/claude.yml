@@ -12,6 +12,12 @@ on:
   pull_request_review:
     types: [submitted]
 
+# The workflow-level token grants nothing at all; the respond job below is the
+# only job and re-declares exactly the scopes it needs. Leaving this undefined
+# would hand every job the repository's default token permissions (OpenSSF
+# Scorecard: token-permissions).
+permissions: {}
+
 # Coarse pre-filter so the job is not scheduled for every comment in the repo;
 # the action applies the authoritative trigger-phrase check once it runs.
 jobs:

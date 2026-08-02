@@ -20,9 +20,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-permissions:
-  contents: write
-  pull-requests: write
+# The workflow-level token grants nothing at all; the triage job re-declares
+# exactly the scopes it needs. Write scopes at the top level would leak into
+# any job later added to this file (OpenSSF Scorecard: token-permissions).
+permissions: {}
 
 concurrency:
   group: dependabot-auto-merge-${{ github.event.pull_request.number }}
@@ -33,6 +34,14 @@ jobs:
     if: ${{ github.actor == 'dependabot[bot]' && github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      # `gh pr merge --auto` arms a squash merge, which is the merge right.
+      contents: write
+      # Arm auto-merge, edit PR labels, and comment on the PR.
+      pull-requests: write
+      # `gh label create` manages repository labels through the issues scope;
+      # without it the escalation step's label bootstrap would be refused.
+      issues: write
     steps:
       - name: Resolve Dependabot update metadata
         id: meta
