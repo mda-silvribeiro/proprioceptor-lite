@@ -55,7 +55,7 @@ jobs:
 
       - name: Run Claude
         if: env.HAS_ANTHROPIC_KEY == 'true'
-        uses: anthropics/claude-code-action@9db594c7a0e82298c121c18b7f08aa1579ce7341 # v1.0.185
+        uses: anthropics/claude-code-action@e2a4b761cd77a1138a5b41410eda9b28581f9bcd # v1.0.196
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # `--append-system-prompt` injects the repository's hard invariants into
