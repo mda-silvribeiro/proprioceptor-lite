@@ -14,10 +14,10 @@
     "deploy": "npx wrangler@4 deploy"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260804.1",
-    "@playwright/test": "^1.62.1",
-    "fast-check": "^4.9.0",
+    "@cloudflare/workers-types": "^5.20260916.1",
+    "@playwright/test": "^1.63.0",
+    "fast-check": "^4.10.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.1"
   }
 }
